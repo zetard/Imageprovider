@@ -1,0 +1,52 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Restore dependencies
+        run: dotnet restore
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+      - name: Pack plugin
+        run: |
+          mkdir -p ${{ github.workspace }}/plugin
+          cp bin/Release/net8.0/Imageprovider.dll ${{ github.workspace }}/plugin/
+      - name: Calculate checksum
+        id: checksum
+        run: |
+          CHECKSUM=$(sha256sum ${{ github.workspace }}/plugin/Imageprovider.dll | awk '{print $1}')
+          echo "checksum=$CHECKSUM" >> $GITHUB_OUTPUT
+      - name: Update manifest.json
+        run: |
+          TAG=${GITHUB_REF_NAME}
+          VERSION=${TAG#v}
+          CHECKSUM="${{ steps.checksum.outputs.checksum }}"
+          sed -i "s|\"version\": \".*\"|\"version\": \"$VERSION.0\"|" manifest.json
+          sed -i "s|\"downloadUrl\": \".*\"|\"downloadUrl\": \"https://github.com/${{ github.repository }}/releases/download/$TAG/Imageprovider.dll\"|" manifest.json
+          sed -i "s|SHA256_PLACEHOLDER|$CHECKSUM|" manifest.json
+      - name: Commit updated manifest
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add manifest.json
+          git commit -m "Update manifest for ${{ github.ref_name }}" || echo "No changes to commit"
+          git push origin HEAD:${{ github.ref_name }}
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ github.workspace }}/plugin/Imageprovider.dll
+          fail_on_unmatched_files: true
