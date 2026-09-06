@@ -34,15 +34,11 @@ public sealed class LocalFolderImageProvider : IRemoteImageProvider, IHasOrder
 
     public bool Supports(BaseItem item)
     {
-        var supported = item is Movie or Series or Season or Episode;
-        _logger.LogDebug("Supports called for {ItemType} {ItemPath}: {Supported}", item.GetType().Name, item.Path, supported);
-        return supported;
+        return item is Movie or Series or Season or Episode;
     }
 
     public IEnumerable<ImageType> GetSupportedImages(BaseItem item)
     {
-        _logger.LogDebug("GetSupportedImages called for {ItemType} {ItemPath}", item.GetType().Name, item.Path);
-
         if (item is Movie or Series)
         {
             yield return ImageType.Primary;
@@ -71,12 +67,10 @@ public sealed class LocalFolderImageProvider : IRemoteImageProvider, IHasOrder
             if (item is Season season && season.Series is { } series && !string.IsNullOrEmpty(series.Path))
             {
                 directory = series.Path;
-                _logger.LogDebug("Using series path for season: {Directory}", directory);
             }
             else if (!string.IsNullOrEmpty(item.Path))
             {
                 directory = item.Path;
-                _logger.LogDebug("Using item path: {Directory}", directory);
             }
             else
             {
@@ -87,7 +81,7 @@ public sealed class LocalFolderImageProvider : IRemoteImageProvider, IHasOrder
             if (File.Exists(directory))
             {
                 directory = Path.GetDirectoryName(directory) ?? directory;
-                _logger.LogDebug("Item path is a file, using parent directory: {Directory}", directory);
+                _logger.LogInformation("Resolved directory from file path: {Directory}", directory);
             }
 
             if (string.IsNullOrEmpty(directory) || !Directory.Exists(directory))
@@ -95,6 +89,8 @@ public sealed class LocalFolderImageProvider : IRemoteImageProvider, IHasOrder
                 _logger.LogWarning("Directory does not exist: {Directory}", directory);
                 return Enumerable.Empty<RemoteImageInfo>();
             }
+
+            _logger.LogInformation("Scanning directory: {Directory}", directory);
 
             var results = new List<RemoteImageInfo>();
             var patterns = GetSearchPatterns(item);
@@ -123,7 +119,7 @@ public sealed class LocalFolderImageProvider : IRemoteImageProvider, IHasOrder
         }
     }
 
-    public Task<HttpResponseMessage> GetImageResponse(string url, CancellationToken cancellationToken)
+    public async Task<HttpResponseMessage> GetImageResponse(string url, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -134,12 +130,10 @@ public sealed class LocalFolderImageProvider : IRemoteImageProvider, IHasOrder
             if (!url.StartsWith("imageprovider://local/", StringComparison.OrdinalIgnoreCase))
             {
                 _logger.LogWarning("Unexpected URL scheme: {Url}", url);
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest));
+                return new HttpResponseMessage(HttpStatusCode.BadRequest);
             }
 
             var encodedPath = url.Substring("imageprovider://local/".Length);
-            _logger.LogDebug("Decoding path from Base64: {EncodedPath}", encodedPath);
-
             string path;
             try
             {
@@ -148,18 +142,16 @@ public sealed class LocalFolderImageProvider : IRemoteImageProvider, IHasOrder
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Invalid Base64 in URL: {Url}", url);
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest));
+                return new HttpResponseMessage(HttpStatusCode.BadRequest);
             }
-
-            _logger.LogDebug("Decoded path: {Path}", path);
 
             if (string.IsNullOrEmpty(path) || !File.Exists(path))
             {
                 _logger.LogWarning("File not found: {Path}", path);
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
             }
 
-            var fileBytes = File.ReadAllBytes(path);
+            var fileBytes = await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
             var response = new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new ByteArrayContent(fileBytes)
@@ -174,12 +166,12 @@ public sealed class LocalFolderImageProvider : IRemoteImageProvider, IHasOrder
             };
 
             _logger.LogInformation("Serving image: {Path} ({Length} bytes)", path, fileBytes.Length);
-            return Task.FromResult(response);
+            return response;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error serving image from URL: {Url}", url);
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError));
+            return new HttpResponseMessage(HttpStatusCode.InternalServerError);
         }
     }
 
@@ -204,42 +196,42 @@ public sealed class LocalFolderImageProvider : IRemoteImageProvider, IHasOrder
     {
         try
         {
-            _logger.LogDebug("Searching for {Pattern} in {Directory}", pattern, directory);
-            var files = Directory.GetFiles(directory, pattern);
-            _logger.LogDebug("Found {Count} files matching {Pattern}", files.Length, pattern);
+            _logger.LogInformation("Searching for {Pattern} in {Directory}", pattern, directory);
+
+            var files = new DirectoryInfo(directory).EnumerateFiles();
+            _logger.LogInformation("Directory contains {Count} files", files.Count());
 
             foreach (var file in files)
             {
-                var extension = Path.GetExtension(file);
+                var fileName = file.Name;
+                var extension = Path.GetExtension(fileName);
+
                 if (!_supportedExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
                 {
-                    _logger.LogDebug("Skipping unsupported extension: {File}", file);
                     continue;
                 }
 
-                try
+                if (!IsMatch(fileName, pattern))
                 {
-                    var fileInfo = new FileInfo(file);
-                    if (fileInfo.Length <= 0)
-                    {
-                        _logger.LogDebug("Skipping empty file: {File}", file);
-                        continue;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Error checking file: {File}", file);
                     continue;
                 }
 
-                _logger.LogInformation("Found custom image: {ImageType} / {Path}", type, file);
+                if (file.Length <= 0)
+                {
+                    _logger.LogDebug("Skipping empty file: {File}", file.FullName);
+                    continue;
+                }
+
+                _logger.LogInformation("Found custom image: {ImageType} / {Path}", type, file.FullName);
 
                 return new RemoteImageInfo
                 {
-                    Url = $"imageprovider://local/{ToUrlSafeBase64(file)}",
+                    Url = $"imageprovider://local/{ToUrlSafeBase64(file.FullName)}",
                     Type = type
                 };
             }
+
+            _logger.LogInformation("No match found for pattern {Pattern} in {Directory}", pattern, directory);
         }
         catch (IOException ex)
         {
@@ -251,6 +243,21 @@ public sealed class LocalFolderImageProvider : IRemoteImageProvider, IHasOrder
         }
 
         return null;
+    }
+
+    private static bool IsMatch(string fileName, string pattern)
+    {
+        var patternParts = pattern.Split('*');
+        if (patternParts.Length == 2)
+        {
+            var prefix = patternParts[0];
+            var suffix = patternParts[1];
+            return fileName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
+                   fileName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) &&
+                   fileName.Length > prefix.Length + suffix.Length;
+        }
+
+        return fileName.Equals(pattern, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string ToUrlSafeBase64(string value)
