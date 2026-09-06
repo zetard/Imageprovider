@@ -1,43 +1,118 @@
-name: Build and Release
+name: Release
+
 on:
   push:
     tags:
-      - 'v*'
+      - "v*.*.*.*"
+
 permissions:
   contents: write
+
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - name: Check out release tag
+        uses: actions/checkout@v4
         with:
-          dotnet-version: '8.0.x'
-      - run: dotnet --info
-      - run: dotnet restore --verbosity detailed
-      - run: dotnet build --configuration Release --no-restore --verbosity detailed
-      - run: |
-          mkdir -p ${{ github.workspace }}/plugin
-          cp bin/Release/net8.0/Imageprovider.dll ${{ github.workspace }}/plugin/
-      - id: checksum
+          fetch-depth: 0
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Read release metadata
+        id: metadata
+        shell: pwsh
         run: |
-          CHECKSUM=$(sha256sum ${{ github.workspace }}/plugin/Imageprovider.dll | awk '{print $1}')
-          echo "checksum=$CHECKSUM" >> $GITHUB_OUTPUT
-      - run: |
-          TAG=${GITHUB_REF_NAME}
-          VERSION=${TAG#v}
-          CHECKSUM="${{ steps.checksum.outputs.checksum }}"
-          sed -i "s|\"version\": \".*\"|\"version\": \"$VERSION.0\"|" manifest.json
-          sed -i "s|\"downloadUrl\": \".*\"|\"downloadUrl\": \"https://github.com/${{ github.repository }}/releases/download/$TAG/Imageprovider.dll\"|" manifest.json
-          sed -i "s|SHA256_PLACEHOLDER|$CHECKSUM|" manifest.json
-      - run: |
-          git config user.name github-actions
-          git config user.email github-actions@github.com
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          $build = Get-Content build.yaml -Raw
+          $targetAbi = [regex]::Match($build, '(?m)^targetAbi:\s*"([^"]+)"').Groups[1].Value
+          $changelog = [regex]::Match($build, '(?m)^changelog:\s*"([^"]+)"').Groups[1].Value
+          if (-not $targetAbi) {
+              throw "Unable to read targetAbi from build.yaml"
+          }
+          if (-not $changelog) {
+              throw "Unable to read changelog from build.yaml"
+          }
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "target_abi=$targetAbi" >> $env:GITHUB_OUTPUT
+          "changelog=$changelog" >> $env:GITHUB_OUTPUT
+          "asset_name=Imageprovider_$version.zip" >> $env:GITHUB_OUTPUT
+
+      - name: Build plugin
+        run: dotnet build Jellyfin.Plugin.Imageprovider.sln --configuration Release
+
+      - name: Package plugin
+        shell: pwsh
+        run: |
+          $asset = "${{ steps.metadata.outputs.asset_name }}"
+          New-Item -ItemType Directory -Path artifacts | Out-Null
+          Compress-Archive `
+            -Path Jellyfin.Plugin.Imageprovider/bin/Release/net9.0/Jellyfin.Plugin.Imageprovider.dll `
+            -DestinationPath "artifacts/$asset"
+
+      - name: Calculate checksum
+        id: checksum
+        shell: pwsh
+        run: |
+          $asset = "artifacts/${{ steps.metadata.outputs.asset_name }}"
+          $checksum = (Get-FileHash $asset -Algorithm MD5).Hash.ToLowerInvariant()
+          "md5=$checksum" >> $env:GITHUB_OUTPUT
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            "artifacts/${{ steps.metadata.outputs.asset_name }}" \
+            --title "Imageprovider ${{ steps.metadata.outputs.version }}" \
+            --notes "${{ steps.metadata.outputs.changelog }}"
+
+      - name: Update Jellyfin catalog
+        shell: pwsh
+        run: |
+          git checkout main
+
+          $existingVersions = @()
+          if (Test-Path manifest.json) {
+              $catalog = @(Get-Content manifest.json -Raw | ConvertFrom-Json)
+              $existingPlugin = $catalog | Where-Object {
+                  $_.guid -eq "14d96703-b889-4c67-88db-1a2bfd1cbf19"
+              } | Select-Object -First 1
+              if ($existingPlugin) {
+                  $existingVersions = @($existingPlugin.versions | Where-Object {
+                      $_.version -ne "${{ steps.metadata.outputs.version }}"
+                  })
+              }
+          }
+
+          $release = [ordered]@{
+              version = "${{ steps.metadata.outputs.version }}"
+              changelog = "${{ steps.metadata.outputs.changelog }}"
+              targetAbi = "${{ steps.metadata.outputs.target_abi }}"
+              sourceUrl = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.metadata.outputs.asset_name }}"
+              checksum = "${{ steps.checksum.outputs.md5 }}"
+              timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+          }
+
+          $entry = [ordered]@{
+              guid = "14d96703-b889-4c67-88db-1a2bfd1cbf19"
+              name = "Imageprovider"
+              description = "Serves local poster, backdrop, season, and episode images from media item directories."
+              overview = "Serves images from the media item's local folder"
+              owner = "zetard"
+              category = "Metadata"
+              versions = @($release) + $existingVersions
+          }
+
+          ConvertTo-Json -InputObject @($entry) -Depth 10 | Set-Content manifest.json
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add manifest.json
-          git commit -m "Update manifest for ${{ github.ref_name }}" || echo "No changes to commit"
-          git push origin HEAD:${{ github.ref_name }}
-      - uses: softprops/action-gh-release@v2.1.0
-        with:
-          files: |
-            ${{ github.workspace }}/plugin/Imageprovider.dll
-          fail_on_unmatched_files: true
+          git commit -m "Update plugin catalog for ${{ github.ref_name }}"
+          git push origin main

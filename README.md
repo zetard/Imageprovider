@@ -1,27 +1,44 @@
 # Imageprovider
 
-Jellyfin plugin that serves images from the media item's local folder. Designed for Posterizarr assets mounted inside the Jellyfin container.
+A Jellyfin plugin that serves local images from media item folders.
 
-## Supported image types
+## Features
 
-- **Movies:** `poster.*`, `cover.*` (Primary); `backdrop.*`, `fanart.*` (Backdrop)
-- **Series:** `poster.*`, `cover.*` (Primary); `backdrop.*`, `fanart.*` (Backdrop)
-- **Seasons:** `Season*.jpg`, `Season*.png` (Primary)
-- **Episodes:** `thumb.*`, `episode.*` (Primary)
+- Scans item directories for local image files
+- Supports `poster.*`, `cover.*`, `backdrop.*`, `fanart.*`, `Season*.jpg/png`, `thumb.*`, `episode.*`
+- Ideal for Posterizarr assets mounted inside the Jellyfin container
+- Runs before Jellyfin's default local image provider (order -100)
 
 ## Installation
 
-Add the repository URL to Jellyfin Dashboard → Plugins → Repositories:
+### From Plugin Repository
+
+1. In Jellyfin, go to **Dashboard > Plugins > Repositories**
+2. Add this URL: `https://raw.githubusercontent.com/zetard/Imageprovider/main/manifest.json`
+3. Find **Imageprovider** in the catalog, install it, and restart Jellyfin
+
+### Manual Installation
+
+1. Build the plugin: `dotnet build Jellyfin.Plugin.Imageprovider.sln --configuration Release`
+2. Copy `Jellyfin.Plugin.Imageprovider.dll` to your Jellyfin plugins directory
+3. Restart Jellyfin
+
+## Configuration
+
+Open **Dashboard > Plugins > Imageprovider** to set the image root directory (default: `/custom-jellyfin-images`).
+
+## Directory Layout
 
 ```
-https://raw.githubusercontent.com/zetard/Imageprovider/main/manifest.json
+/custom-jellyfin-images/
+├── Primary/
+│   ├── tt1375666.jpg
+│   └── 27205.png
+├── Backdrop/
+├── Logo/
+└── Thumb/
 ```
 
-Replace `YOUR_USERNAME` with your GitHub username.
+## Build
 
-## Files
-
-- `/Movies/3 Idiots (2009) {imdb-tt1187043}/poster.jpg`
-- `/Shows/House (2004) {imdb-tt0412142}/poster.jpg`
-- `/Shows/House (2004) {imdb-tt0412142}/Season01.jpg`
-- `/Shows/House (2004) {imdb-tt0412142}/backdrop.jpg`
+Requires .NET 9 SDK and Jellyfin 10.11.11 or compatible.
