@@ -8,6 +8,22 @@
     "category": "Metadata",
     "versions": [
       {
+        "version": "1.0.4",
+        "changelog": "Scan item directories directly for poster, season, and episode images",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/zetard/Imageprovider/releases/download/v1.0.4/Imageprovider_1.0.4.zip",
+        "checksum": "ab89634d61d2d7682b8da7431b78a3bb",
+        "timestamp": "2026-09-06T18:56:27Z"
+      },
+      {
+        "version": "1.0.3",
+        "changelog": "Scan item directories directly for poster, season, and episode images",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/zetard/Imageprovider/releases/download/v1.0.3/Imageprovider_1.0.3.zip",
+        "checksum": "32539368f46576f79b5bf1a775507450",
+        "timestamp": "2026-09-06T16:57:51Z"
+      },
+      {
         "version": "1.0.0",
         "changelog": "Initial release targeting Jellyfin 10.11.11",
         "targetAbi": "10.11.0.0",
