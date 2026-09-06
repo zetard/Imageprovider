@@ -79,41 +79,41 @@ jobs:
            git pull --rebase origin main
 
            $existingVersions = @()
-          if (Test-Path manifest.json) {
-              $catalog = @(Get-Content manifest.json -Raw | ConvertFrom-Json)
-              $existingPlugin = $catalog | Where-Object {
-                  $_.guid -eq "14d96703-b889-4c67-88db-1a2bfd1cbf19"
-              } | Select-Object -First 1
-              if ($existingPlugin) {
-                  $existingVersions = @($existingPlugin.versions | Where-Object {
-                      $_.version -ne "${{ steps.metadata.outputs.version }}"
-                  })
-              }
-          }
+           if (Test-Path manifest.json) {
+               $catalog = @(Get-Content manifest.json -Raw | ConvertFrom-Json)
+               $existingPlugin = $catalog | Where-Object {
+                   $_.guid -eq "14d96703-b889-4c67-88db-1a2bfd1cbf19"
+               } | Select-Object -First 1
+               if ($existingPlugin) {
+                   $existingVersions = @($existingPlugin.versions | Where-Object {
+                       $_.version -ne "${{ steps.metadata.outputs.version }}"
+                   })
+               }
+           }
 
-          $release = [ordered]@{
-              version = "${{ steps.metadata.outputs.version }}"
-              changelog = "${{ steps.metadata.outputs.changelog }}"
-              targetAbi = "${{ steps.metadata.outputs.target_abi }}"
-              sourceUrl = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.metadata.outputs.asset_name }}"
-              checksum = "${{ steps.checksum.outputs.md5 }}"
-              timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-          }
+           $release = [ordered]@{
+               version = "${{ steps.metadata.outputs.version }}"
+               changelog = "${{ steps.metadata.outputs.changelog }}"
+               targetAbi = "${{ steps.metadata.outputs.target_abi }}"
+               sourceUrl = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.metadata.outputs.asset_name }}"
+               checksum = "${{ steps.checksum.outputs.md5 }}"
+               timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+           }
 
-          $entry = [ordered]@{
-              guid = "14d96703-b889-4c67-88db-1a2bfd1cbf19"
-              name = "Imageprovider"
-              description = "Serves local poster, backdrop, season, and episode images from media item directories."
-              overview = "Serves images from the media item's local folder"
-              owner = "zetard"
-              category = "Metadata"
-              versions = @($release) + $existingVersions
-          }
+           $entry = [ordered]@{
+               guid = "14d96703-b889-4c67-88db-1a2bfd1cbf19"
+               name = "Imageprovider"
+               description = "Serves local poster, backdrop, season, and episode images from media item directories."
+               overview = "Serves images from the media item's local folder"
+               owner = "zetard"
+               category = "Metadata"
+               versions = @($release) + $existingVersions
+           }
 
-          ConvertTo-Json -InputObject @($entry) -Depth 10 | Set-Content manifest.json
+           ConvertTo-Json -InputObject @($entry) -Depth 10 | Set-Content manifest.json
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add manifest.json
-          git commit -m "Update plugin catalog for ${{ github.ref_name }}"
-          git push origin main
+           git config user.name "github-actions[bot]"
+           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+           git add manifest.json
+           git commit -m "Update plugin catalog for ${{ github.ref_name }}"
+           git push origin main
