@@ -35,12 +35,6 @@ public sealed class LocalFolderImageProvider : ILocalImageProvider, IHasOrder
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(directoryService);
 
-        var rootDirectory = Plugin.Instance?.Configuration.ImageRootDirectory;
-        if (string.IsNullOrWhiteSpace(rootDirectory))
-        {
-            yield break;
-        }
-
         string directory;
         if (item is Season season && season.Series is { } series && !string.IsNullOrEmpty(series.Path))
         {
