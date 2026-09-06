@@ -72,12 +72,13 @@ jobs:
             --title "Imageprovider ${{ steps.metadata.outputs.version }}" \
             --notes "${{ steps.metadata.outputs.changelog }}"
 
-      - name: Update Jellyfin catalog
-        shell: pwsh
-        run: |
-          git checkout main
+       - name: Update Jellyfin catalog
+         shell: pwsh
+         run: |
+           git checkout main
+           git pull --rebase origin main
 
-          $existingVersions = @()
+           $existingVersions = @()
           if (Test-Path manifest.json) {
               $catalog = @(Get-Content manifest.json -Raw | ConvertFrom-Json)
               $existingPlugin = $catalog | Where-Object {
