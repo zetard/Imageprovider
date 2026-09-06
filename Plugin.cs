@@ -1,3 +1,4 @@
+using MediaBrowser.Model.Plugins;
 using Jellyfin.Plugin;
 using Microsoft.Extensions.DependencyInjection;
 

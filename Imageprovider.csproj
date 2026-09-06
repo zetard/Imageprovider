@@ -9,13 +9,18 @@
     <Version>1.0.0</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>1.0.0.0</FileVersion>
-    <Company>YourName</Company>
+    <Company>zetard</Company>
     <Product>Imageprovider</Product>
-    <Authors>YourName</Authors>
+    <Authors>zetard</Authors>
     <Description>Serves images from the media item's local folder, ideal for Posterizarr assets mounted inside the Jellyfin container.</Description>
-    <Copyright>Copyright © YourName</Copyright>
+    <Copyright>Copyright © zetard</Copyright>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Jellyfin.Plugin" Version="10.8.13" />
+    <PackageReference Include="Jellyfin.Controller" Version="10.8.13">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+    <PackageReference Include="Jellyfin.Model" Version="10.8.13">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
   </ItemGroup>
 </Project>
