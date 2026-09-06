@@ -1,7 +1,7 @@
 ---
 name: "Imageprovider"
 guid: "14d96703-b889-4c67-88db-1a2bfd1cbf19"
-version: "1.0.2"
+version: "1.0.3"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 overview: "Serves images from the media item's local folder"
