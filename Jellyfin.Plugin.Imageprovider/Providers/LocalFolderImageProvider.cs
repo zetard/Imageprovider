@@ -284,6 +284,7 @@ public sealed class LocalFolderImageProvider : IRemoteImageProvider, IHasOrder
 
                 return new RemoteImageInfo
                 {
+                    ProviderName = Name,
                     Url = $"imageprovider://local/{ToUrlSafeBase64(file.FullName)}",
                     Type = type
                 };
