@@ -64,6 +64,7 @@ jobs:
           "md5=$checksum" >> $env:GITHUB_OUTPUT
 
       - name: Publish GitHub release
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
