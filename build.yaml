@@ -1,7 +1,7 @@
 ---
 name: "Imageprovider"
 guid: "14d96703-b889-4c67-88db-1a2bfd1cbf19"
-version: "1.0.12"
+version: "1.0.13"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 overview: "Serves images from the media item's local folder"
@@ -12,4 +12,4 @@ category: "Metadata"
 owner: "zetard"
 artifacts:
 - "Jellyfin.Plugin.Imageprovider.dll"
-changelog: "Scan item directories directly for poster, season, and episode images"
+changelog: "Add fallback to /assets/Movies and /assets/Shows directories"

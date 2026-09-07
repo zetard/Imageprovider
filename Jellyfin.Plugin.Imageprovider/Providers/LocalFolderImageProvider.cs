@@ -109,6 +109,33 @@ public sealed class LocalFolderImageProvider : IRemoteImageProvider, IHasOrder
                 }
             }
 
+            if (results.Count == 0)
+            {
+                _logger.LogInformation("No images found in item directory, trying assets directory fallback");
+                var assetsDirectory = GetAssetsDirectory(item, directory);
+                if (!string.IsNullOrEmpty(assetsDirectory) && Directory.Exists(assetsDirectory))
+                {
+                    _logger.LogInformation("Scanning assets directory: {Directory}", assetsDirectory);
+                    foreach (var (type, patternList) in patterns)
+                    {
+                        foreach (var pattern in patternList)
+                        {
+                            var image = FindImage(assetsDirectory, type, pattern);
+                            if (image is not null)
+                            {
+                                results.Add(image);
+                                _logger.LogInformation("Added image for {ImageType} from assets: {Url}", type, image.Url);
+                                break;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    _logger.LogInformation("No assets directory found or directory does not exist");
+                }
+            }
+
             _logger.LogInformation("GetImages returning {Count} images for {ItemPath}", results.Count, item.Path);
             return results;
         }
@@ -116,6 +143,37 @@ public sealed class LocalFolderImageProvider : IRemoteImageProvider, IHasOrder
         {
             _logger.LogError(ex, "Error in GetImages for {ItemPath}", item.Path);
             return Enumerable.Empty<RemoteImageInfo>();
+        }
+    }
+
+    private string? GetAssetsDirectory(BaseItem item, string itemDirectory)
+    {
+        try
+        {
+            var folderName = new DirectoryInfo(itemDirectory).Name;
+            string assetsRoot = "/assets";
+            string? libraryFolder = item switch
+            {
+                Movie => "Movies",
+                Series => "Shows",
+                Season => "Shows",
+                Episode => "Shows",
+                _ => null
+            };
+
+            if (string.IsNullOrEmpty(libraryFolder))
+            {
+                return null;
+            }
+
+            var assetsDirectory = Path.Combine(assetsRoot, libraryFolder, folderName);
+            _logger.LogInformation("Trying assets directory: {Directory}", assetsDirectory);
+            return assetsDirectory;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error determining assets directory for {ItemPath}", item.Path);
+            return null;
         }
     }
 
