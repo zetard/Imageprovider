@@ -185,45 +185,57 @@ public sealed class LocalFolderImageProvider : IRemoteImageProvider, IHasOrder
         {
             _logger.LogInformation("GetImageResponse called for URL: {Url}", url);
 
-            if (!url.StartsWith("imageprovider://local/", StringComparison.OrdinalIgnoreCase))
+            byte[] fileBytes;
+            string contentType;
+
+            if (url.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase))
+            {
+                var base64Data = url.Substring(url.IndexOf("base64,", StringComparison.OrdinalIgnoreCase) + 7);
+                fileBytes = Convert.FromBase64String(base64Data);
+                contentType = url.Substring(5, url.IndexOf(";") - 5);
+                _logger.LogInformation("Serving data URL image ({Length} bytes, {ContentType})", fileBytes.Length, contentType);
+            }
+            else if (url.StartsWith("imageprovider://local/", StringComparison.OrdinalIgnoreCase))
+            {
+                var encodedPath = url.Substring("imageprovider://local/".Length);
+                string path;
+                try
+                {
+                    path = Encoding.UTF8.GetString(FromUrlSafeBase64(encodedPath));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Invalid Base64 in URL: {Url}", url);
+                    return new HttpResponseMessage(HttpStatusCode.BadRequest);
+                }
+
+                if (string.IsNullOrEmpty(path) || !File.Exists(path))
+                {
+                    _logger.LogWarning("File not found: {Path}", path);
+                    return new HttpResponseMessage(HttpStatusCode.NotFound);
+                }
+
+                fileBytes = await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
+                contentType = Path.GetExtension(path).ToLowerInvariant() switch
+                {
+                    ".png" => "image/png",
+                    ".webp" => "image/webp",
+                    _ => "image/jpeg"
+                };
+                _logger.LogInformation("Serving image: {Path} ({Length} bytes)", path, fileBytes.Length);
+            }
+            else
             {
                 _logger.LogWarning("Unexpected URL scheme: {Url}", url);
                 return new HttpResponseMessage(HttpStatusCode.BadRequest);
             }
 
-            var encodedPath = url.Substring("imageprovider://local/".Length);
-            string path;
-            try
-            {
-                path = Encoding.UTF8.GetString(FromUrlSafeBase64(encodedPath));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Invalid Base64 in URL: {Url}", url);
-                return new HttpResponseMessage(HttpStatusCode.BadRequest);
-            }
-
-            if (string.IsNullOrEmpty(path) || !File.Exists(path))
-            {
-                _logger.LogWarning("File not found: {Path}", path);
-                return new HttpResponseMessage(HttpStatusCode.NotFound);
-            }
-
-            var fileBytes = await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
             var response = new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new ByteArrayContent(fileBytes)
             };
+            response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
 
-            var extension = Path.GetExtension(path).ToLowerInvariant();
-            response.Content.Headers.ContentType = extension switch
-            {
-                ".png" => new System.Net.Http.Headers.MediaTypeHeaderValue("image/png"),
-                ".webp" => new System.Net.Http.Headers.MediaTypeHeaderValue("image/webp"),
-                _ => new System.Net.Http.Headers.MediaTypeHeaderValue("image/jpeg")
-            };
-
-            _logger.LogInformation("Serving image: {Path} ({Length} bytes)", path, fileBytes.Length);
             return response;
         }
         catch (Exception ex)
@@ -285,7 +297,7 @@ public sealed class LocalFolderImageProvider : IRemoteImageProvider, IHasOrder
                 return new RemoteImageInfo
                 {
                     ProviderName = Name,
-                    Url = $"imageprovider://local/{ToUrlSafeBase64(file.FullName)}",
+                    Url = $"data:image/{GetImageMimeType(extension)};base64,{Convert.ToBase64String(File.ReadAllBytes(file.FullName))}",
                     Type = type
                 };
             }
@@ -317,6 +329,16 @@ public sealed class LocalFolderImageProvider : IRemoteImageProvider, IHasOrder
         }
 
         return fileName.Equals(pattern, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GetImageMimeType(string extension)
+    {
+        return extension.ToLowerInvariant() switch
+        {
+            ".png" => "png",
+            ".webp" => "webp",
+            _ => "jpeg"
+        };
     }
 
     private static string ToUrlSafeBase64(string value)
